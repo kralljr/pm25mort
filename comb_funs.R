@@ -33,21 +33,23 @@ healthest.allcities <- function(cities, lag,
 	for(j in 1:length(cities)){
 		# print(cities[j])  
         
-		cityrisk <- healthrisk.city(city = cities[j], 
+		cityrisk <- try(healthrisk.city(city = cities[j], 
 				lag = lag,
 				outcome = outcome, 
 				reg.formula = reg.formula,
-				estimates = estimates)
-
-		regcoefs[j, ] <- cityrisk[[1]][, 1]
-		regses[j, ] <- cityrisk[[1]][, 2]
+				estimates = estimates), silent = T)
 				
-		regcoefs.seas[j, ] <- cityrisk[[2]][, 1]
-		regses.seas[j, ] <- cityrisk[[2]][, 2]
+		if(class(cityrisk) != "try-error") {	
 
-        varall[,, j] <- cityrisk[[3]]
-        sampsize[j, ] <- cityrisk[[4]]
-
+			regcoefs[j, ] <- cityrisk[[1]][, 1]
+			regses[j, ] <- cityrisk[[1]][, 2]
+					
+			regcoefs.seas[j, ] <- cityrisk[[2]][, 1]
+			regses.seas[j, ] <- cityrisk[[2]][, 2]
+	
+	        varall[,, j] <- cityrisk[[3]]
+	        sampsize[j, ] <- cityrisk[[4]]
+			}
 
 		}#end loop over cities
 
@@ -104,16 +106,37 @@ comb.sea <- function(regcoefs, regses, varcovar,
 	var.seas <- varcovar[,, season]
 
 	#get rid of NA var terms
+	keeps <- 0
 	for(i in 1 : dim(var.seas)[3]) {
+		# print(i)
 		lna <- length(which(is.na(var.seas[, , i])))
+		ln1 <- length(which(abs(var.seas[,, i]) > 10000))
 		
-		if(lna != 0 ) {
-			var.seas <- var.seas[, , -i]
-			coef.seas <- coef.seas[-i, ]
+		if(lna != 0 | ln1 != 0) {
+			# browser()
+			keeps <- c(keeps, i)
 		}
 		
 	}
-
+	keeps <- keeps[-1]
+	if(length(keeps) > 0) {
+		var.seas <- var.seas[,, -keeps]
+		coef.seas <- coef.seas[-keeps, ]
+		print(paste("remove large var/NA var:", cities[keeps]))
+	}
+	
+	if(dim(var.seas)[3] < 10) {
+		stop("error: less than 10 cities")
+	}
+	
+	
+	whl <- which(abs(coef.ann) > 1000)
+	if(length(whl) > 0) {
+		coef.ann <- coef.ann[-whl]
+		ses.ann <- ses.ann[-whl]
+		print(paste("remove: too large", cities[whl]))
+		
+	}
           
 	tln.ann <- tlnise(Y = coef.ann, V = ses.ann^2, 
 		brief = 0, maxiter = 5000, Tol = 10^(-7), prnt = print1)
